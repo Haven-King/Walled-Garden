@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "walled-garden",
+  "version": "${version}",
+
+  "name": "Walled Garden",
+  "description": "Control access to your server based on users installed mods.",
+  "authors": [
+    "Haven King"
+  ],
+  "contact": {
+    "homepage": "https://github.com/Hephaestus-Dev/WalledGarden",
+    "sources": "https://github.com/Hephaestus-Dev/WalledGarden",
+    "issues": "https://github.com/Hephaestus-Dev/WalledGarden/issues"
+  },
+
+  "license": "MIT",
+  "icon": "assets/walled-garden/icon.png",
+
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "dev.hephaestus.garden.impl.WalledGarden",
+      "dev.hephaestus.garden.impl.WalledGardenNetworking"
+    ],
+    "client": [
+      "dev.hephaestus.garden.impl.WalledGardenNetworking"
+    ]
+  },
+
+  "mixins": [
+    "walled-garden.mixins.json"
+  ],
+
+  "depends": {
+    "fabricloader": ">=0.7.4",
+    "fabric-networking-api-v1": "*",
+    "minecraft": "*"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.hephaestus.garden.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [
+    "GameProfileAccessor",
+    "MixinMinecraftServer"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
