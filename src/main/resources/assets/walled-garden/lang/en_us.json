@@ -1,11 +1,14 @@
 {
   "message.walled-garden.blacklist": "The following mods are not allowed on this server: %s",
   "message.walled-garden.required": "The following mods are required to play on this server:",
+  "message.walled-garden.whitelist": "The following mods are not allowed on this server: %s",
   "command.walled-garden.blacklist": "%s is now blacklisted on this server.",
+  "command.walled-garden.whitelist": "%s is now whitelisted on this server.",
   "command.walled-garden.required": "%s is now required to play on this server.",
   "command.walled-garden.not-found": "%s is not currently restricted in any way.",
   "command.walled-garden.remove.blacklist": "%s removed from blacklisted mods.",
   "command.walled-garden.remove.required": "%s removed from required mods.",
+  "command.walled-garden.remove.whitelist": "%s removed from whitelisted mods.",
   "command.walled-garden.list.blacklist": "Blacklisted mods (%d):",
-  "command.walled-garden.list.required": "Required mods (%d):"
-}
+  "command.walled-garden.list.required": "Required mods (%d):",
+  "command.walled-garden.list.whitelist": "Whitelisted mods (%d):"}

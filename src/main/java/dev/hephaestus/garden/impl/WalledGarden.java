@@ -1,5 +1,6 @@
 package dev.hephaestus.garden.impl;
 
+import com.google.common.collect.ImmutableSet;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
@@ -19,11 +20,17 @@ import net.minecraft.text.TranslatableText;
 import net.minecraft.util.Identifier;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class WalledGarden implements ModInitializer {
+    private static final ImmutableSet<String> DEFAULT_WHITELIST = ImmutableSet.of("walled-garden", "minecraft", "java", "fabricloader", "fabric-api-base", "fabric", "fabric-biome-api-v1", "fabric-blockrenderlayer-v1", "fabric-commands-v0", "fabric-command-api-v1", "fabric-config-api-v1", "fabric-containers-v0", "fabric-content-registries-v0", "fabric-crash-report-info-v1", "fabric-dimensions-v1", "fabric-entity-events-v1", "fabric-events-interaction-v0", "fabric-events-lifecycle-v0", "fabric-game-rule-api-v1", "fabric-item-api-v1", "fabric-item-groups-v0", "fabric-keybindings-v0", "fabric-key-binding-api-v1", "fabric-lifecycle-events-v1", "fabric-loot-tables-v1", "fabric-mining-levels-v0", "fabric-models-v0", "fabric-networking-v0", "fabric-networking-api-v1", "fabric-networking-blockentity-v0", "fabric-object-builder-api-v1", "fabric-object-builders-v0", "fabric-particles-v1", "fabric-registry-sync-v0", "fabric-renderer-api-v1", "fabric-renderer-indigo", "fabric-renderer-registries-v1", "fabric-rendering-v0", "fabric-rendering-v1", "fabric-rendering-data-attachment-v1", "fabric-rendering-fluids-v1", "fabric-resource-loader-v0", "fabric-screen-api-v1", "fabric-screen-handler-api-v1", "fabric-structure-api-v1", "fabric-tag-extensions-v0", "fabric-textures-v0", "fabric-tool-attribute-api-v1");
     private static final String MOD_ID = "walled-garden";
 
     public static final Logger LOG = LogManager.getLogger("WalledGarden");
@@ -37,8 +44,7 @@ public class WalledGarden implements ModInitializer {
         Config.read();
 
         SuggestionProvider<ServerCommandSource> conditionType = (context, builder) -> {
-            builder.suggest("require");
-            builder.suggest("blacklist");
+            for (Condition action : Condition.values()) builder.suggest(action.condition);
 
             return CompletableFuture.completedFuture(builder.build());
         };
@@ -54,14 +60,13 @@ public class WalledGarden implements ModInitializer {
 
         SuggestionProvider<ServerCommandSource> mods = (context, builder) -> {
             String action = context.getArgument("action", String.class);
-            boolean blacklist = context.getArgument("condition", String.class)
-                    .equalsIgnoreCase("blacklist");
+            Condition condition = Condition.of(context.getArgument("condition", String.class));
 
             if (action.equalsIgnoreCase("get") || action.equalsIgnoreCase("remove")) {
-                for (ModDependency dependency : blacklist ? Config.getBlacklistedMods() : Config.getRequiredMods()) {
+                for (ModDependency dependency : condition.list()) {
                     builder.suggest(dependency.getModId());
                 }
-            } else if (action.equalsIgnoreCase("add") && !blacklist) {
+            } else if (action.equalsIgnoreCase("add") && condition != Condition.BLACKLISTED) {
                 for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
                     builder.suggest(mod.getMetadata().getId());
                 }
@@ -95,20 +100,16 @@ public class WalledGarden implements ModInitializer {
         String action = context.getArgument("action", String.class);
 
         if (action.equalsIgnoreCase("list")) {
-            String condition = context.getArgument("condition", String.class);
-                boolean blacklist = condition.equals("blacklist");
+            Condition condition = Condition.of(context.getArgument("condition", String.class));
+            Collection<ModDependency> dependencies = condition.list();
 
-                Collection<ModDependency> dependencies = blacklist ? Config.getBlacklistedMods() : Config.getRequiredMods();
+            context.getSource().sendFeedback(new TranslatableText("command.walled-garden.list." + condition.condition,
+                    dependencies.size()
+            ), false);
 
-                context.getSource().sendFeedback(new TranslatableText(blacklist
-                        ? "command.walled-garden.list.blacklist"
-                        : "command.walled-garden.list.required",
-                        dependencies.size()
-                ), false);
-
-                for (ModDependency dependency : dependencies) {
-                    context.getSource().sendFeedback(new LiteralText("  • " + DependencyUtil.toString(dependency)), false);
-                }
+            for (ModDependency dependency : dependencies) {
+                context.getSource().sendFeedback(new LiteralText("  • " + DependencyUtil.toString(dependency)), false);
+            }
 
             return 1;
         }
@@ -122,28 +123,24 @@ public class WalledGarden implements ModInitializer {
 
     private static int withoutVersion(CommandContext<ServerCommandSource> context) {
         String action = context.getArgument("action", String.class);
-        String condition = context.getArgument("condition", String.class);
+        Condition condition = Condition.of(context.getArgument("condition", String.class));
 
         if (action.equalsIgnoreCase("add")) {
             return add(context, "\"*\"");
         } else if (action.equalsIgnoreCase("remove")) {
             String modId = context.getArgument("modId", String.class);
 
-            ModDependency removed = condition.equals("blacklist")
-                    ? Config.unBlacklist(modId)
-                    : Config.unRequire(modId);
+            ModDependency removed = condition.remove(modId);
 
             if (removed != null) {
-                context.getSource().sendFeedback(new TranslatableText("command.walled-garden.remove." + condition, modId), true);
+                context.getSource().sendFeedback(new TranslatableText("command.walled-garden.remove." + condition.condition, modId), true);
             }
 
             return 1;
         } else if (action.equalsIgnoreCase("get")) {
             String modId = context.getArgument("modId", String.class);
 
-            ModDependency dependency = condition.equals("blacklist")
-                    ? Config.getBlacklistedVersion(modId)
-                    : Config.getRequiredVersion(modId);
+            ModDependency dependency = condition.get(modId);
 
             context.getSource().sendFeedback(dependency == null
                             ? new TranslatableText("command.walled-garden.not-found", modId)
@@ -158,43 +155,12 @@ public class WalledGarden implements ModInitializer {
     private static int add(CommandContext<ServerCommandSource> context, String versionPredicate) {
         ServerCommandSource source = context.getSource();
         String modId = context.getArgument("modId", String.class);
-        String condition = context.getArgument("condition", String.class);
+        Condition condition = Condition.of(context.getArgument("condition", String.class));
         ModDependency dependency = DependencyUtil.dependency(modId, versionPredicate);
 
         if (dependency == null) return -1;
 
-        if (condition.equalsIgnoreCase("blacklist")) {
-            return blacklist(source, modId, dependency);
-        } else if (condition.equalsIgnoreCase("require")) {
-            return require(source, modId, dependency);
-        }
-
-        return 100;
-    }
-
-    private static int blacklist(ServerCommandSource source, String modId, ModDependency dependency) {
-        Config.blacklist(modId, dependency);
-
-        MinecraftServer server = source.getMinecraftServer();
-        PlayerVersionMap versions = (PlayerVersionMap) server;
-        PlayerManager playerManager = server.getPlayerManager();
-
-        for (ServerPlayerEntity player : playerManager.getPlayerList()) {
-            PlayerModVersionsContainer playerVersions = versions.getModVersions(player.getGameProfile().getName());
-            String version = playerVersions.getVersion(modId);
-
-            if (version != null && isBlacklisted(modId, version)) {
-                player.networkHandler.disconnect(
-                        new TranslatableText("message.walled-garden.blacklist",
-                                "\n" + DependencyUtil.toString(dependency))
-                );
-            }
-        }
-
-        source.sendFeedback(
-                new TranslatableText("command.walled-garden.blacklist", DependencyUtil.toString(dependency)), true);
-
-        return 1;
+        return condition.add(source, modId, dependency);
     }
 
     private static int require(ServerCommandSource source, String modId, ModDependency dependency) {
@@ -241,6 +207,65 @@ public class WalledGarden implements ModInitializer {
         return 1;
     }
 
+    private static int blacklist(ServerCommandSource source, String modId, ModDependency dependency) {
+        Config.blacklist(modId, dependency);
+
+        MinecraftServer server = source.getMinecraftServer();
+        PlayerVersionMap versions = (PlayerVersionMap) server;
+        PlayerManager playerManager = server.getPlayerManager();
+
+        for (ServerPlayerEntity player : playerManager.getPlayerList()) {
+            PlayerModVersionsContainer playerVersions = versions.getModVersions(player.getGameProfile().getName());
+            String version = playerVersions.getVersion(modId);
+
+            if (version != null && isBlacklisted(modId, version)) {
+                player.networkHandler.disconnect(
+                        new TranslatableText("message.walled-garden.blacklist",
+                                "\n" + DependencyUtil.toString(dependency))
+                );
+            }
+        }
+
+        source.sendFeedback(
+                new TranslatableText("command.walled-garden.blacklist", DependencyUtil.toString(dependency)), true);
+
+        return 1;
+    }
+
+    private static int whitelist(ServerCommandSource source, String modId, ModDependency dependency) {
+        Config.whitelist(modId, dependency);
+
+        MinecraftServer server = source.getMinecraftServer();
+        PlayerVersionMap versions = (PlayerVersionMap) server;
+        PlayerManager playerManager = server.getPlayerManager();
+
+        for (ServerPlayerEntity player : playerManager.getPlayerList()) {
+            PlayerModVersionsContainer playerVersions = versions.getModVersions(player.getGameProfile().getName());
+
+            StringBuilder builder = new StringBuilder();
+
+            for (Map.Entry<String, String> modVersions : playerVersions) {
+                if (!isWhitelisted(modVersions.getKey(), modVersions.getValue())) {
+                    builder.append("\n").append(modVersions.getKey());
+                }
+            }
+
+            String message = builder.toString();
+
+            if (!message.isEmpty()) {
+                player.networkHandler.disconnect(
+                        new TranslatableText("message.walled-garden.whitelist",
+                                message)
+                );
+            }
+        }
+
+        source.sendFeedback(
+                new TranslatableText("command.walled-garden.whitelist", DependencyUtil.toString(dependency)), true);
+
+        return 1;
+    }
+
     public static boolean isBlacklisted(String modId, String modVersion) {
         try {
             ModDependency dependency = Config.getBlacklistedVersion(modId);
@@ -248,5 +273,66 @@ public class WalledGarden implements ModInitializer {
         } catch (VersionParsingException e) {
             return Config.getBlacklistedVersion(modId) != null;
         }
+    }
+
+    public static boolean isWhitelisted(String modId, String modVersion) {
+        if (Config.getWhitelistedMods().isEmpty()) return true;
+
+        if (DEFAULT_WHITELIST.contains(modId)) return true;
+
+        try {
+            ModDependency dependency = Config.getWhitelistedVersion(modId);
+            return dependency != null && dependency.matches(SemanticVersion.parse(modVersion));
+        } catch (VersionParsingException e) {
+            return Config.getWhitelistedVersion(modId) != null;
+        }
+    }
+
+    private static final Map<String, Condition> CONDITIONS = new HashMap<>();
+
+    enum Condition {
+        BLACKLISTED("blacklist", Config::getBlacklistedMods, WalledGarden::blacklist, Config::getBlacklistedVersion, Config::unBlacklist),
+        REQUIRED("required", Config::getRequiredMods, WalledGarden::require, Config::getRequiredVersion, Config::unRequire),
+        WHITELISTED("whitelist", Config::getWhitelistedMods, WalledGarden::whitelist, Config::getWhitelistedVersion, Config::unWhitelist);
+
+        public final String condition;
+        private final Supplier<Collection<ModDependency>> list;
+        private final Adder adder;
+        private final Function<String, @Nullable ModDependency> getter;
+        private final Function<String, @Nullable ModDependency> remover;
+
+        Condition(String condition, Supplier<Collection<ModDependency>> list, Adder adder, Function<String, @Nullable ModDependency> getter, Function<String, @Nullable ModDependency> remover) {
+            this.condition = condition;
+            this.list = list;
+            this.adder = adder;
+            this.getter = getter;
+            this.remover = remover;
+            CONDITIONS.put(condition, this);
+        }
+
+        public static WalledGarden.Condition of(String condition) {
+            return CONDITIONS.get(condition);
+        }
+
+        public Collection<ModDependency> list() {
+            return this.list.get();
+        }
+
+        public int add(ServerCommandSource source, String modId, ModDependency dependency) {
+            return this.adder.add(source, modId, dependency);
+        }
+
+        public @Nullable ModDependency get(String modId) {
+            return this.getter.apply(modId);
+        }
+
+        public @Nullable ModDependency remove(String modId) {
+            return this.remover.apply(modId);
+        }
+    }
+
+    @FunctionalInterface
+    private interface Adder {
+        int add(ServerCommandSource source, String modId, ModDependency dependency);
     }
 }

@@ -25,6 +25,7 @@ public class Config {
 
     private static final Map<String, ModDependency> REQUIRED_MODS = new LinkedHashMap<>();
     private static final Map<String, ModDependency> BLACKLISTED_MODS = new LinkedHashMap<>();
+    private static final Map<String, ModDependency> WHITELISTED_MODS = new LinkedHashMap<>();
 
     private Config() {
     }
@@ -46,6 +47,9 @@ public class Config {
                         case "blacklisted":
                             DependencyUtil.readDependenciesContainer(reader, BLACKLISTED_MODS);
                             break;
+                        case "whitelisted":
+                            DependencyUtil.readDependenciesContainer(reader, WHITELISTED_MODS);
+                            break;
                         default:
                             reader.skipValue();
                     }
@@ -64,6 +68,7 @@ public class Config {
 
             object.add("required", DependencyUtil.toJsonObject(REQUIRED_MODS));
             object.add("blacklisted", DependencyUtil.toJsonObject(BLACKLISTED_MODS));
+            object.add("whitelisted", DependencyUtil.toJsonObject(WHITELISTED_MODS));
 
             BufferedWriter writer = Files.newBufferedWriter(CONFIG_FILE);
             GSON.toJson(object, writer);
@@ -74,32 +79,43 @@ public class Config {
         }
     }
 
-
+    static void require(String modId, ModDependency dependency) {
+        REQUIRED_MODS.put(modId, dependency);
+        write();
+    }
 
     static void blacklist(String modId, ModDependency dependency) {
         BLACKLISTED_MODS.put(modId, dependency);
         write();
     }
 
-    static void require(String modId, ModDependency dependency) {
-        REQUIRED_MODS.put(modId, dependency);
+    static void whitelist(String modId, ModDependency dependency) {
+        WHITELISTED_MODS.put(modId, dependency);
         write();
-    }
-
-    static @Nullable ModDependency getBlacklistedVersion(String modId) {
-        return BLACKLISTED_MODS.get(modId);
     }
 
     static @Nullable ModDependency getRequiredVersion(String modId) {
         return REQUIRED_MODS.get(modId);
     }
 
-    static Collection<ModDependency> getBlacklistedMods() {
-        return new ArrayList<>(BLACKLISTED_MODS.values());
+    static @Nullable ModDependency getBlacklistedVersion(String modId) {
+        return BLACKLISTED_MODS.get(modId);
+    }
+
+    static @Nullable ModDependency getWhitelistedVersion(String modId) {
+        return WHITELISTED_MODS.get(modId);
     }
 
     static Collection<ModDependency> getRequiredMods() {
         return new ArrayList<>(REQUIRED_MODS.values());
+    }
+
+    static Collection<ModDependency> getBlacklistedMods() {
+        return new ArrayList<>(BLACKLISTED_MODS.values());
+    }
+
+    static Collection<ModDependency> getWhitelistedMods() {
+        return new ArrayList<>(WHITELISTED_MODS.values());
     }
 
     static Map<String, String> getMissing(Map<String, String> mods) {
@@ -128,11 +144,15 @@ public class Config {
         return result;
     }
 
+    public static ModDependency unRequire(String modId) {
+        return REQUIRED_MODS.remove(modId);
+    }
+
     public static ModDependency unBlacklist(String modId) {
         return BLACKLISTED_MODS.remove(modId);
     }
 
-    public static ModDependency unRequire(String modId) {
-        return REQUIRED_MODS.remove(modId);
+    public static ModDependency unWhitelist(String modId) {
+        return WHITELISTED_MODS.remove(modId);
     }
 }

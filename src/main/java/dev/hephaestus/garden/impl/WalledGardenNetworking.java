@@ -15,6 +15,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerLoginConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerLoginNetworking;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
+import net.fabricmc.loader.api.metadata.ModDependency;
 import net.fabricmc.loader.api.metadata.ModMetadata;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientLoginNetworkHandler;
@@ -84,7 +85,7 @@ public class WalledGardenNetworking implements ModInitializer, ClientModInitiali
 			String playerName = ((GameProfileAccessor) handler).getProfile().getName();
 
 			Map<String, String> mods = new HashMap<>();
-			Map<String, String> blackListed = new LinkedHashMap<>();
+			Map<String, String> notAllowedMods = new LinkedHashMap<>();
 
 			int modCount = buf.readVarInt();
 
@@ -93,8 +94,8 @@ public class WalledGardenNetworking implements ModInitializer, ClientModInitiali
 				String modId = buf.readString(32767);
 				String modVersion = buf.readString(32767);
 
-				if (WalledGarden.isBlacklisted(modId, modVersion)) {
-					blackListed.put(modId, modVersion);
+				if (WalledGarden.isBlacklisted(modId, modVersion) || !WalledGarden.isWhitelisted(modId, modVersion)) {
+					notAllowedMods.put(modId, modVersion);
 				}
 
 				mods.put(modId, modVersion);
@@ -102,7 +103,7 @@ public class WalledGardenNetworking implements ModInitializer, ClientModInitiali
 
 			Map<String, String> requiredMods = Config.getMissing(mods);
 
-			Optional<MutableText> blacklistResult = checkBlacklist(playerName, blackListed);
+			Optional<MutableText> blacklistResult = checkBlacklist(playerName, notAllowedMods);
 			Optional<MutableText> requiredModsResult = checkRequiredMods(playerName, requiredMods);
 
 			// Disconnect if either criteria is not met
@@ -135,7 +136,7 @@ public class WalledGardenNetworking implements ModInitializer, ClientModInitiali
 	private static Optional<MutableText> checkBlacklist(String playerName, Map<String, String> blackListed) {
 		if (blackListed.isEmpty()) return Optional.empty();
 
-		WalledGarden.LOG.info("{} tried to join with blacklisted mods:", playerName);
+		WalledGarden.LOG.info("{} tried to join with disallowed mods:", playerName);
 
 		StringBuilder builder = new StringBuilder();
 
@@ -143,7 +144,11 @@ public class WalledGardenNetworking implements ModInitializer, ClientModInitiali
 			String modId = entry.getKey();
 			String modVersion = entry.getValue();
 			WalledGarden.LOG.info("\t{}: {}", modId, modVersion);
-			builder.append("\n").append(Config.getBlacklistedVersion(modId));
+
+			builder.append("\n");
+
+			ModDependency dependency = Config.getBlacklistedVersion(modId);
+			builder.append(dependency == null ? modId : dependency);
 		}
 
 		return Optional.of(new TranslatableText("message.walled-garden.blacklist", builder.toString()));
