@@ -107,16 +107,19 @@ public class Config {
 
         for (Map.Entry<String, ModDependency> entry : REQUIRED_MODS.entrySet()) {
             if (!mods.containsKey(entry.getKey())) {
-                try {
-                    if (!entry.getValue().matches(SemanticVersion.parse(mods.get(entry.getKey())))) {
+                result.put(entry.getKey(), entry.getValue().toString());
+                continue;
+            }
+
+            try {
+                if (!entry.getValue().matches(SemanticVersion.parse(mods.get(entry.getKey())))) {
+                    result.put(entry.getKey(), entry.getValue().toString());
+                }
+            } catch (VersionParsingException e) {
+                for (VersionPredicate predicate : entry.getValue().getVersionRequirements()) {
+                    if (predicate.getType() != VersionPredicate.Type.ANY) {
                         result.put(entry.getKey(), entry.getValue().toString());
-                    }
-                } catch (VersionParsingException e) {
-                    for (VersionPredicate predicate : entry.getValue().getVersionRequirements()) {
-                        if (predicate.getType() != VersionPredicate.Type.ANY) {
-                            result.put(entry.getKey(), entry.getValue().toString());
-                            break;
-                        }
+                        break;
                     }
                 }
             }

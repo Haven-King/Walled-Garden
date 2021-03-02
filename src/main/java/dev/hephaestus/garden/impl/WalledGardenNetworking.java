@@ -34,6 +34,7 @@ import java.util.function.Consumer;
 public class WalledGardenNetworking implements ModInitializer, ClientModInitializer {
 	private static final Identifier MOD_VALIDATION_CHANNEL = WalledGarden.id("channel", "mod_validation");
 	private static final Text REQUEST_NOT_UNDERSTOOD = new LiteralText("Please install the Walled Garden mod to play on this server.");
+	private static final Text ALSO_REQUIRED = new LiteralText("The following mods are also required:");
 
 	@Override
 	public void onInitialize() {
@@ -70,7 +71,15 @@ public class WalledGardenNetworking implements ModInitializer, ClientModInitiali
 
 	private static void handleResponse(MinecraftServer server, ServerLoginNetworkHandler handler, boolean understood, PacketByteBuf buf, ServerLoginNetworking.LoginSynchronizer loginSynchronizer, PacketSender sender) {
 		if (!understood) {
-			handler.disconnect(REQUEST_NOT_UNDERSTOOD);
+			MutableText text = REQUEST_NOT_UNDERSTOOD.copy();
+
+			if (!Config.getRequiredMods().isEmpty()) {
+				text.append(new LiteralText("\n").append(ALSO_REQUIRED));
+			}
+
+			text.append(DependencyUtil.getTextWithLinks(Collections.emptyMap()));
+
+			handler.disconnect(text);
 		} else {
 			String playerName = ((GameProfileAccessor) handler).getProfile().getName();
 
@@ -98,9 +107,17 @@ public class WalledGardenNetworking implements ModInitializer, ClientModInitiali
 
 			// Disconnect if either criteria is not met
 			if (blacklistResult.isPresent() || requiredModsResult.isPresent()) {
-				MutableText disconnectReason = blacklistResult.orElse(new LiteralText(""))
-						.append(requiredModsResult.map(t -> new LiteralText("\n\n").append(t))
-								.orElse(new LiteralText("")));
+				MutableText disconnectReason = new LiteralText("");
+
+				if (blacklistResult.isPresent()) {
+					disconnectReason.append(blacklistResult.get());
+
+					if (requiredModsResult.isPresent()) {
+						disconnectReason.append(new LiteralText("\n\n"));
+					}
+				}
+
+				requiredModsResult.ifPresent(disconnectReason::append);
 
 				handler.disconnect(disconnectReason);
 				return;
@@ -132,19 +149,16 @@ public class WalledGardenNetworking implements ModInitializer, ClientModInitiali
 		return Optional.of(new TranslatableText("message.walled-garden.blacklist", builder.toString()));
 	}
 
-	private static Optional<MutableText> checkRequiredMods(String playerName, Map<String, String> requiredMods){
-		if (requiredMods.isEmpty()) return Optional.empty();
+	private static Optional<MutableText> checkRequiredMods(String playerName, Map<String, String> missingMods){
+		if (missingMods.isEmpty()) return Optional.empty();
 
 		WalledGarden.LOG.info("{} tried to join without the following mods:", playerName);
 
-		StringBuilder builder = new StringBuilder();
-
-		for (Map.Entry<String, String> entry : requiredMods.entrySet()) {
-			String modId = entry.getKey();
-			WalledGarden.LOG.info("\t{}: {}", modId, entry.getValue());
-			builder.append("\n").append(entry.getValue());
+		for (Map.Entry<String, String> entry : missingMods.entrySet()) {
+			WalledGarden.LOG.info("\t{}: {}", entry.getKey(), entry.getValue());
 		}
 
-		return Optional.of(new TranslatableText("message.walled-garden.required", builder.toString()));
+		return Optional.of(new TranslatableText("message.walled-garden.required")
+				.append(DependencyUtil.getTextWithLinks(missingMods)));
 	}
 }

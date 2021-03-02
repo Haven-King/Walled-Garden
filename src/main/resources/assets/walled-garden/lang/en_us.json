@@ -1,6 +1,6 @@
 {
   "message.walled-garden.blacklist": "The following mods are not allowed on this server: %s",
-  "message.walled-garden.required": "The following mods are required to play on this server: %s",
+  "message.walled-garden.required": "The following mods are required to play on this server:",
   "command.walled-garden.blacklist": "%s is now blacklisted on this server.",
   "command.walled-garden.required": "%s is now required to play on this server.",
   "command.walled-garden.not-found": "%s is not currently restricted in any way.",

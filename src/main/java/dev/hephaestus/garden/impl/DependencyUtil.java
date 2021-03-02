@@ -11,6 +11,10 @@ import net.fabricmc.loader.api.metadata.ModDependency;
 import net.fabricmc.loader.lib.gson.JsonReader;
 import net.fabricmc.loader.lib.gson.JsonToken;
 import net.fabricmc.loader.metadata.ParseMetadataException;
+import net.minecraft.text.ClickEvent;
+import net.minecraft.text.LiteralText;
+import net.minecraft.text.MutableText;
+import net.minecraft.text.Text;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -144,6 +148,32 @@ public class DependencyUtil {
         String modName = FabricLoader.getInstance().getModContainer(dependency.getModId())
                 .map(c -> c.getMetadata().getName()).orElse(dependency.getModId());
 
-        return dependency.toString().replace(dependency.getModId(), modName);
+        return String.format("%s %s", modName, dependency);
+    }
+
+    static Text getTextWithLinks(Map<String, String> missingMods) {
+        MutableText text = new LiteralText("");
+
+        FabricLoader loader = FabricLoader.getInstance();
+
+        for (Map.Entry<String, String> entry : missingMods.entrySet()) {
+            text.append("\n");
+
+            loader.getModContainer(entry.getKey()).ifPresent(modContainer -> {
+                text.append(new LiteralText(modContainer.getMetadata().getName() + " "));
+                /* Man, I wish this worked, but the disconnect screen doesn't display links :(
+                Map<String, String> contact = modContainer.getMetadata().getContact().asMap();
+
+                if (contact.containsKey("homepage")) {
+                    dependencyText.styled(style -> style.withClickEvent(
+                            new ClickEvent(ClickEvent.Action.OPEN_URL, contact.get("homepage")))
+                    );
+                }*/
+            });
+
+            text.append(new LiteralText(entry.getValue()));
+        }
+
+        return text;
     }
 }

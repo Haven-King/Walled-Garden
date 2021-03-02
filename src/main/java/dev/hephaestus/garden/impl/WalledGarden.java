@@ -104,7 +104,7 @@ public class WalledGarden implements ModInitializer {
                         ? "command.walled-garden.list.blacklist"
                         : "command.walled-garden.list.required",
                         dependencies.size()
-                ).styled(style -> style.withBold(true)), false);
+                ), false);
 
                 for (ModDependency dependency : dependencies) {
                     context.getSource().sendFeedback(new LiteralText("  • " + DependencyUtil.toString(dependency)), false);
