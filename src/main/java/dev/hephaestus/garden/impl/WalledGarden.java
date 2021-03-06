@@ -1,13 +1,16 @@
 package dev.hephaestus.garden.impl;
 
 import com.google.common.collect.ImmutableSet;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import dev.hephaestus.garden.api.PlayerModVersionsContainer;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v1.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.registry.RegistryEntryAddedCallback;
 import net.fabricmc.loader.api.*;
 import net.fabricmc.loader.api.metadata.ModDependency;
 import net.minecraft.server.MinecraftServer;
@@ -16,8 +19,10 @@ import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.LiteralText;
+import net.minecraft.text.MutableText;
 import net.minecraft.text.TranslatableText;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.registry.Registry;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
@@ -25,6 +30,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -42,6 +48,7 @@ public class WalledGarden implements ModInitializer {
     @Override
     public void onInitialize() {
         Config.read();
+        check(Registry.BLOCK, Registry.ITEM);
 
         SuggestionProvider<ServerCommandSource> conditionType = (context, builder) -> {
             for (Condition action : Condition.values()) builder.suggest(action.condition);
@@ -91,9 +98,35 @@ public class WalledGarden implements ModInitializer {
                                                 .executes(WalledGarden::get)
                                         )
                                 )
+                        .then(LiteralArgumentBuilder.<ServerCommandSource>literal("require_mods_that_add_blocks_and_items")
+                                .then(RequiredArgumentBuilder.<ServerCommandSource, Boolean>argument("required", BoolArgumentType.bool())
+                                        .executes(WalledGarden::requireModsThatAddBlocksAndItems)
+                                )
                         )
-                )
+                ))
         );
+    }
+
+    private static int requireModsThatAddBlocksAndItems(CommandContext<ServerCommandSource> context) {
+        Boolean required = context.getArgument("required", Boolean.class);
+
+        Config.setRequireModsThatAddBlocksAndItems(required);
+
+        MinecraftServer server = context.getSource().getMinecraftServer();
+        PlayerVersionMap versions = (PlayerVersionMap) server;
+        PlayerManager playerManager = server.getPlayerManager();
+
+        for (ServerPlayerEntity player : playerManager.getPlayerList()) {
+            PlayerModVersionsContainer playerVersions = versions.getModVersions(player.getGameProfile().getName());
+
+            Map<String, String> missing = Config.getMissing(playerVersions.asMap());
+
+            Optional<MutableText> text = checkRequiredMods(player.getGameProfile().getName(), missing);
+
+            text.ifPresent(message -> player.networkHandler.disconnect(message));
+        }
+
+        return 0;
     }
 
     private static int get(CommandContext<ServerCommandSource> context) {
@@ -334,5 +367,51 @@ public class WalledGarden implements ModInitializer {
     @FunctionalInterface
     private interface Adder {
         int add(ServerCommandSource source, String modId, ModDependency dependency);
+    }
+
+    private static void check(Registry<?>... registries) {
+        for (Registry<?> registry: registries) {
+            for (Identifier id : registry.getIds()) {
+                Config.addsBlockOrItem(id.getNamespace());
+            }
+
+            RegistryEntryAddedCallback.event(registry).register((rawId, id, object) -> {
+                Config.addsBlockOrItem(id.getNamespace());
+            });
+        }
+    }
+
+    public static Optional<MutableText> checkBlacklist(String playerName, Map<String, String> blackListed) {
+        if (blackListed.isEmpty()) return Optional.empty();
+
+        LOG.info("{} tried to join with disallowed mods:", playerName);
+
+        StringBuilder builder = new StringBuilder();
+
+        for (Map.Entry<String, String> entry : blackListed.entrySet()) {
+            String modId = entry.getKey();
+            String modVersion = entry.getValue();
+            LOG.info("\t{}: {}", modId, modVersion);
+
+            builder.append("\n");
+
+            ModDependency dependency = Config.getBlacklistedVersion(modId);
+            builder.append(dependency == null ? modId : dependency);
+        }
+
+        return Optional.of(new TranslatableText("message.walled-garden.blacklist", builder.toString()));
+    }
+
+    public static Optional<MutableText> checkRequiredMods(String playerName, Map<String, String> missingMods){
+        if (missingMods.isEmpty()) return Optional.empty();
+
+        LOG.info("{} tried to join without the following mods:", playerName);
+
+        for (Map.Entry<String, String> entry : missingMods.entrySet()) {
+            LOG.info("\t{}: {}", entry.getKey(), entry.getValue());
+        }
+
+        return Optional.of(new TranslatableText("message.walled-garden.required")
+                .append(DependencyUtil.getTextWithLinks(missingMods)));
     }
 }

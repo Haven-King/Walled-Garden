@@ -35,6 +35,7 @@
   "depends": {
     "fabricloader": ">=0.7.4",
     "fabric-networking-api-v1": "*",
+    "fabric-registry-sync-v0": "*",
     "minecraft": "*"
   }
 }

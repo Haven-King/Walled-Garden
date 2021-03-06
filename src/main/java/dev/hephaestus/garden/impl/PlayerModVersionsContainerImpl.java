@@ -16,6 +16,11 @@ public class PlayerModVersionsContainerImpl implements PlayerModVersionsContaine
         return this.versions.get(modId);
     }
 
+    @Override
+    public Map<String, String> asMap() {
+        return this.versions;
+    }
+
     public void put(String modId, String version) {
         this.versions.put(modId, version);
     }

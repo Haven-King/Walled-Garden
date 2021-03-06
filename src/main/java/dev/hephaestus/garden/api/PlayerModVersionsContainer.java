@@ -17,4 +17,5 @@ public interface PlayerModVersionsContainer extends Iterable<Map.Entry<String, S
     }
 
     @Nullable String getVersion(String modId);
+    Map<String, String> asMap();
 }
