@@ -321,6 +321,17 @@ public class WalledGarden implements ModInitializer {
         }
     }
 
+    public static boolean isRequired(String modId, String modVersion) {
+        if (Config.getRequiredMods().isEmpty()) return false;
+
+        try {
+            ModDependency dependency = Config.getRequiredVersion(modId);
+            return dependency != null && dependency.matches(SemanticVersion.parse(modVersion));
+        } catch (VersionParsingException e) {
+            return Config.getRequiredVersion(modId) != null;
+        }
+    }
+
     private static final Map<String, Condition> CONDITIONS = new HashMap<>();
 
     enum Condition {
@@ -375,9 +386,8 @@ public class WalledGarden implements ModInitializer {
                 Config.addsBlockOrItem(id.getNamespace());
             }
 
-            RegistryEntryAddedCallback.event(registry).register((rawId, id, object) -> {
-                Config.addsBlockOrItem(id.getNamespace());
-            });
+            RegistryEntryAddedCallback.event(registry).register((rawId, id, object) ->
+                    Config.addsBlockOrItem(id.getNamespace()));
         }
     }
 

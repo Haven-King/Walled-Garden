@@ -92,7 +92,7 @@ public class WalledGardenNetworking implements ModInitializer, ClientModInitiali
 				String modId = buf.readString(32767);
 				String modVersion = buf.readString(32767);
 
-				if (WalledGarden.isBlacklisted(modId, modVersion) || !WalledGarden.isWhitelisted(modId, modVersion)) {
+				if (WalledGarden.isBlacklisted(modId, modVersion) || (!WalledGarden.isWhitelisted(modId, modVersion) && !WalledGarden.isRequired(modId, modVersion))) {
 					notAllowedMods.put(modId, modVersion);
 				}
 
