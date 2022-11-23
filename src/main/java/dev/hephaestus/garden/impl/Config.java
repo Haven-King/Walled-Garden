@@ -3,12 +3,12 @@ package dev.hephaestus.garden.impl;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
+import com.google.gson.stream.JsonReader;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.SemanticVersion;
 import net.fabricmc.loader.api.VersionParsingException;
 import net.fabricmc.loader.api.VersionPredicate;
 import net.fabricmc.loader.api.metadata.ModDependency;
-import net.fabricmc.loader.lib.gson.JsonReader;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedWriter;

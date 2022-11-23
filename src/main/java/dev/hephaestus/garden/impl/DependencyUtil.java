@@ -3,14 +3,14 @@ package dev.hephaestus.garden.impl;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import com.google.gson.JsonPrimitive;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonToken;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.VersionPredicate;
 import net.fabricmc.loader.api.metadata.ModDependency;
-import net.fabricmc.loader.lib.gson.JsonReader;
-import net.fabricmc.loader.lib.gson.JsonToken;
-import net.fabricmc.loader.metadata.ParseMetadataException;
 import net.minecraft.text.ClickEvent;
 import net.minecraft.text.LiteralText;
 import net.minecraft.text.MutableText;
@@ -73,9 +73,9 @@ public class DependencyUtil {
         return null;
     }
 
-    static void readDependenciesContainer(JsonReader reader, Map<String, ModDependency> modDependencies) throws IOException, ParseMetadataException {
+    static void readDependenciesContainer(JsonReader reader, Map<String, ModDependency> modDependencies) throws IOException, JsonParseException {
         if (reader.peek() != JsonToken.BEGIN_OBJECT) {
-            throw new ParseMetadataException("Dependency container must be an object!", reader);
+            throw parseException("Dependency container must be an object! Error was located at: ", reader);
         }
 
         reader.beginObject();
@@ -92,7 +92,7 @@ public class DependencyUtil {
         reader.endObject();
     }
 
-    private static @Nullable ModDependency dependency(String modId, JsonReader reader) throws IOException, ParseMetadataException {
+    private static @Nullable ModDependency dependency(String modId, JsonReader reader) throws IOException, JsonParseException {
             final List<String> matcherStringList = new ArrayList<>();
 
             FabricLoader loader = FabricLoader.getInstance();
@@ -116,7 +116,7 @@ public class DependencyUtil {
 
                     while (reader.hasNext()) {
                         if (reader.peek() != JsonToken.STRING) {
-                            throw new ParseMetadataException("Dependency version range array must only contain string values", reader);
+                            throw parseException("Dependency version range array must only contain string values! Error was located at: ", reader);
                         }
 
                         matcherStringList.add(reader.nextString());
@@ -125,7 +125,7 @@ public class DependencyUtil {
                     reader.endArray();
                     break;
                 default:
-                    throw new ParseMetadataException("Dependency version range must be a string or string array!", reader);
+                    throw parseException("Dependency version range must be a string or string array! Error was located at: ", reader);
             }
 
         try {
@@ -175,5 +175,9 @@ public class DependencyUtil {
         }
 
         return text;
+    }
+
+    static JsonParseException parseException(String message, JsonReader reader) {
+        return new JsonParseException(message + reader.toString().substring(reader.getClass().getSimpleName().length()));
     }
 }
