@@ -9,8 +9,11 @@ import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
-import net.fabricmc.loader.api.VersionPredicate;
+import net.fabricmc.loader.api.Version;
+import net.fabricmc.loader.api.VersionParsingException;
 import net.fabricmc.loader.api.metadata.ModDependency;
+import net.fabricmc.loader.api.metadata.version.VersionInterval;
+import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 import net.minecraft.text.ClickEvent;
 import net.minecraft.text.LiteralText;
 import net.minecraft.text.MutableText;
@@ -19,28 +22,9 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.StringReader;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.util.*;
 
 public class DependencyUtil {
-    private static final Constructor<? extends ModDependency> MOD_DEPENDENCY_CONSTRUCTOR;
-
-    static {
-        Constructor<? extends ModDependency> MOD_DEPENDENCY_CONSTRUCTOR1 = null;
-
-        try {
-            //noinspection unchecked
-            Class<? extends ModDependency> clazz = (Class<? extends ModDependency>) Class.forName("net.fabricmc.loader.metadata.ModDependencyImpl");
-            MOD_DEPENDENCY_CONSTRUCTOR1 = clazz.getDeclaredConstructor(String.class, List.class);
-            MOD_DEPENDENCY_CONSTRUCTOR1.setAccessible(true);
-        } catch (ClassNotFoundException | NoSuchMethodException e) {
-            e.printStackTrace();
-        }
-
-        MOD_DEPENDENCY_CONSTRUCTOR = MOD_DEPENDENCY_CONSTRUCTOR1;
-    }
-
     static JsonObject toJsonObject(Map<String, ModDependency> map) {
         JsonObject object = new JsonObject();
 
@@ -56,7 +40,7 @@ public class DependencyUtil {
     }
 
     private static @Nullable JsonElement toJsonElement(ModDependency modDependency) {
-        Set<VersionPredicate> predicates = modDependency.getVersionRequirements();
+        Collection<VersionPredicate> predicates = modDependency.getVersionRequirements();
 
         if (predicates.size() == 1) {
             return new JsonPrimitive(predicates.iterator().next().toString());
@@ -129,8 +113,49 @@ public class DependencyUtil {
             }
 
         try {
-            return matcherStringList.isEmpty() ? null : MOD_DEPENDENCY_CONSTRUCTOR.newInstance(modId, matcherStringList);
-        } catch (InstantiationException | IllegalAccessException | InvocationTargetException ignored) {
+            if (matcherStringList.isEmpty()) {
+                return null;
+            }
+
+            final Collection<VersionPredicate> ranges = VersionPredicate.parse(matcherStringList);
+
+            return new ModDependency() {
+                @Override
+                public String getModId() {
+                    return modId;
+                }
+
+                @Override
+                public Collection<VersionPredicate> getVersionRequirements() {
+                    return ranges;
+                }
+
+                @Override
+                public boolean matches(Version version) {
+                    for (VersionPredicate predicate : getVersionRequirements()) {
+                        if (predicate.test(version)) return true;
+                    }
+
+                    return false;
+                }
+
+                @Override
+                public List<VersionInterval> getVersionIntervals() {
+                    List<VersionInterval> ret = Collections.emptyList();
+
+                    for (VersionPredicate predicate : getVersionRequirements()) {
+                        ret = VersionInterval.or(ret, predicate.getInterval());
+                    }
+
+                    return ret;
+                }
+
+                @Override
+                public Kind getKind() {
+                    return Kind.DEPENDS;
+                }
+            };
+        } catch (VersionParsingException ignored) {
             return null;
         }
     }

@@ -7,8 +7,9 @@ import com.google.gson.stream.JsonReader;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.SemanticVersion;
 import net.fabricmc.loader.api.VersionParsingException;
-import net.fabricmc.loader.api.VersionPredicate;
 import net.fabricmc.loader.api.metadata.ModDependency;
+import net.fabricmc.loader.api.metadata.version.VersionInterval;
+import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedWriter;
@@ -148,7 +149,7 @@ public class Config {
                 }
             } catch (VersionParsingException e) {
                 for (VersionPredicate predicate : entry.getValue().getVersionRequirements()) {
-                    if (predicate.getType() != VersionPredicate.Type.ANY) {
+                    if (predicate.getInterval() != VersionInterval.INFINITE) {
                         result.put(entry.getKey(), entry.getValue().toString());
                         break;
                     }

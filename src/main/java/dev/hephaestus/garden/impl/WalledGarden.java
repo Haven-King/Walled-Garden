@@ -13,6 +13,8 @@ import net.fabricmc.fabric.api.command.v1.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.registry.RegistryEntryAddedCallback;
 import net.fabricmc.loader.api.*;
 import net.fabricmc.loader.api.metadata.ModDependency;
+import net.fabricmc.loader.api.metadata.version.VersionInterval;
+import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.PlayerManager;
 import net.minecraft.server.command.CommandManager;
@@ -217,7 +219,7 @@ public class WalledGarden implements ModInitializer {
                     disconnect = !dependency.matches(version);
                 } catch (VersionParsingException ignored) {
                     for (VersionPredicate predicate : dependency.getVersionRequirements()) {
-                        if (predicate.getType() != VersionPredicate.Type.ANY) {
+                        if (predicate.getInterval() != VersionInterval.INFINITE) {
                             disconnect = true;
                             break;
                         }
