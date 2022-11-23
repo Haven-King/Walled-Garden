@@ -15,7 +15,6 @@ import net.fabricmc.loader.api.metadata.ModDependency;
 import net.fabricmc.loader.api.metadata.version.VersionInterval;
 import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 import net.minecraft.text.ClickEvent;
-import net.minecraft.text.LiteralText;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import org.jetbrains.annotations.Nullable;
@@ -197,7 +196,7 @@ public class DependencyUtil {
     }
 
     static Text getTextWithLinks(Map<String, String> missingMods) {
-        MutableText text = new LiteralText("");
+        MutableText text = Text.literal("");
 
         FabricLoader loader = FabricLoader.getInstance();
 
@@ -205,7 +204,7 @@ public class DependencyUtil {
             text.append("\n");
 
             loader.getModContainer(entry.getKey()).ifPresent(modContainer -> {
-                text.append(new LiteralText(modContainer.getMetadata().getName() + " "));
+                text.append(Text.literal(modContainer.getMetadata().getName() + " "));
                 /* Man, I wish this worked, but the disconnect screen doesn't display links :(
                 Map<String, String> contact = modContainer.getMetadata().getContact().asMap();
 
@@ -216,7 +215,7 @@ public class DependencyUtil {
                 }*/
             });
 
-            text.append(new LiteralText(entry.getValue()));
+            text.append(Text.literal(entry.getValue()));
         }
 
         return text;
