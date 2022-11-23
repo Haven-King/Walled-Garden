@@ -154,6 +154,26 @@ public class DependencyUtil {
                 public Kind getKind() {
                     return Kind.DEPENDS;
                 }
+
+                @Override
+                public String toString() {
+                    final StringBuilder builder = new StringBuilder("{");
+                    builder.append(getKind().getKey());
+                    builder.append(' ');
+                    builder.append(getModId());
+                    builder.append(" @ [");
+
+                    for (int i = 0; i < matcherStringList.size(); i++) {
+                        if (i > 0) {
+                            builder.append(" || ");
+                        }
+
+                        builder.append(matcherStringList.get(i));
+                    }
+
+                    builder.append("]}");
+                    return builder.toString();
+                }
             };
         } catch (VersionParsingException ignored) {
             return null;
