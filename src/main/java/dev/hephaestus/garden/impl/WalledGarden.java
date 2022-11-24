@@ -9,18 +9,19 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import dev.hephaestus.garden.api.PlayerModVersionsContainer;
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.command.v1.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.registry.RegistryEntryAddedCallback;
 import net.fabricmc.loader.api.*;
 import net.fabricmc.loader.api.metadata.ModDependency;
+import net.fabricmc.loader.api.metadata.version.VersionInterval;
+import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.PlayerManager;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.LiteralText;
 import net.minecraft.text.MutableText;
-import net.minecraft.text.TranslatableText;
+import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.registry.Registry;
 import org.apache.logging.log4j.LogManager;
@@ -36,7 +37,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 public class WalledGarden implements ModInitializer {
-    private static final ImmutableSet<String> DEFAULT_WHITELIST = ImmutableSet.of("walled-garden", "minecraft", "java", "fabricloader", "fabric-api-base", "fabric", "fabric-biome-api-v1", "fabric-blockrenderlayer-v1", "fabric-commands-v0", "fabric-command-api-v1", "fabric-config-api-v1", "fabric-containers-v0", "fabric-content-registries-v0", "fabric-crash-report-info-v1", "fabric-dimensions-v1", "fabric-entity-events-v1", "fabric-events-interaction-v0", "fabric-events-lifecycle-v0", "fabric-game-rule-api-v1", "fabric-item-api-v1", "fabric-item-groups-v0", "fabric-keybindings-v0", "fabric-key-binding-api-v1", "fabric-lifecycle-events-v1", "fabric-loot-tables-v1", "fabric-mining-levels-v0", "fabric-models-v0", "fabric-networking-v0", "fabric-networking-api-v1", "fabric-networking-blockentity-v0", "fabric-object-builder-api-v1", "fabric-object-builders-v0", "fabric-particles-v1", "fabric-registry-sync-v0", "fabric-renderer-api-v1", "fabric-renderer-indigo", "fabric-renderer-registries-v1", "fabric-rendering-v0", "fabric-rendering-v1", "fabric-rendering-data-attachment-v1", "fabric-rendering-fluids-v1", "fabric-resource-loader-v0", "fabric-screen-api-v1", "fabric-screen-handler-api-v1", "fabric-structure-api-v1", "fabric-tag-extensions-v0", "fabric-textures-v0", "fabric-tool-attribute-api-v1");
+    private static final ImmutableSet<String> DEFAULT_WHITELIST = ImmutableSet.of("walled-garden", "minecraft", "java", "fabricloader", "fabric-api-base", "fabric", "fabric-api", "fabric-api-lookup-api-v1", "fabric-biome-api-v1", "fabric-blockrenderlayer-v1", "fabric-client-tags-api-v1", "fabric-convention-tags-v1", "fabric-commands-v0", "fabric-command-api-v1", "fabric-command-api-v2", "fabric-config-api-v1", "fabric-containers-v0", "fabric-content-registries-v0", "fabric-crash-report-info-v1", "fabric-data-generation-api-v1", "fabric-dimensions-v1", "fabric-entity-events-v1", "fabric-events-interaction-v0", "fabric-events-lifecycle-v0", "fabric-game-rule-api-v1", "fabric-item-api-v1", "fabric-item-groups-v0", "fabric-keybindings-v0", "fabric-key-binding-api-v1", "fabric-lifecycle-events-v1", "fabric-loot-tables-v1", "fabric-loot-api-v2", "fabric-message-api-v1", "fabric-mining-levels-v0", "fabric-mining-level-api-v1", "fabric-models-v0", "fabric-networking-v0", "fabric-networking-api-v1", "fabric-networking-blockentity-v0", "fabric-object-builder-api-v1", "fabric-object-builders-v0", "fabric-particles-v1", "fabric-registry-sync-v0", "fabric-renderer-api-v1", "fabric-renderer-indigo", "fabric-renderer-registries-v1", "fabric-rendering-v0", "fabric-rendering-v1", "fabric-rendering-data-attachment-v1", "fabric-rendering-fluids-v1", "fabric-resource-conditions-api-v1", "fabric-resource-loader-v0", "fabric-screen-api-v1", "fabric-screen-handler-api-v1", "fabric-structure-api-v1", "fabric-tag-extensions-v0", "fabric-textures-v0", "fabric-tool-attribute-api-v1", "fabric-transfer-api-v1", "fabric-transitive-access-wideners-v1");
     private static final String MOD_ID = "walled-garden";
 
     public static final Logger LOG = LogManager.getLogger("WalledGarden");
@@ -82,7 +83,7 @@ public class WalledGarden implements ModInitializer {
             return CompletableFuture.completedFuture(builder.build());
         };
 
-        CommandRegistrationCallback.EVENT.register(((dispatcher, dedicated) ->
+        CommandRegistrationCallback.EVENT.register(((dispatcher, registryAccess, dedicated) ->
                 dispatcher.register(CommandManager.literal("wg")
                         .requires(source -> source.hasPermissionLevel(4))
                         .then(RequiredArgumentBuilder.<ServerCommandSource, String>argument("condition", StringArgumentType.string())
@@ -112,7 +113,7 @@ public class WalledGarden implements ModInitializer {
 
         Config.setRequireModsThatAddBlocksAndItems(required);
 
-        MinecraftServer server = context.getSource().getMinecraftServer();
+        MinecraftServer server = context.getSource().getServer();
         PlayerVersionMap versions = (PlayerVersionMap) server;
         PlayerManager playerManager = server.getPlayerManager();
 
@@ -136,12 +137,12 @@ public class WalledGarden implements ModInitializer {
             Condition condition = Condition.of(context.getArgument("condition", String.class));
             Collection<ModDependency> dependencies = condition.list();
 
-            context.getSource().sendFeedback(new TranslatableText("command.walled-garden.list." + condition.condition,
+            context.getSource().sendFeedback(Text.translatable("command.walled-garden.list." + condition.condition,
                     dependencies.size()
             ), false);
 
             for (ModDependency dependency : dependencies) {
-                context.getSource().sendFeedback(new LiteralText("  • " + DependencyUtil.toString(dependency)), false);
+                context.getSource().sendFeedback(Text.literal("  • " + DependencyUtil.toString(dependency)), false);
             }
 
             return 1;
@@ -166,7 +167,7 @@ public class WalledGarden implements ModInitializer {
             ModDependency removed = condition.remove(modId);
 
             if (removed != null) {
-                context.getSource().sendFeedback(new TranslatableText("command.walled-garden.remove." + condition.condition, modId), true);
+                context.getSource().sendFeedback(Text.translatable("command.walled-garden.remove." + condition.condition, modId), true);
             }
 
             return 1;
@@ -176,8 +177,8 @@ public class WalledGarden implements ModInitializer {
             ModDependency dependency = condition.get(modId);
 
             context.getSource().sendFeedback(dependency == null
-                            ? new TranslatableText("command.walled-garden.not-found", modId)
-                            : new LiteralText(DependencyUtil.toString(dependency)), false);
+                            ? Text.translatable("command.walled-garden.not-found", modId)
+                            : Text.literal(DependencyUtil.toString(dependency)), false);
 
             return 1;
         }
@@ -199,7 +200,7 @@ public class WalledGarden implements ModInitializer {
     private static int require(ServerCommandSource source, String modId, ModDependency dependency) {
         Config.require(modId, dependency);
 
-        MinecraftServer server = source.getMinecraftServer();
+        MinecraftServer server = source.getServer();
         PlayerVersionMap versions = (PlayerVersionMap) server;
         PlayerManager playerManager = server.getPlayerManager();
 
@@ -217,7 +218,7 @@ public class WalledGarden implements ModInitializer {
                     disconnect = !dependency.matches(version);
                 } catch (VersionParsingException ignored) {
                     for (VersionPredicate predicate : dependency.getVersionRequirements()) {
-                        if (predicate.getType() != VersionPredicate.Type.ANY) {
+                        if (predicate.getInterval() != VersionInterval.INFINITE) {
                             disconnect = true;
                             break;
                         }
@@ -227,14 +228,14 @@ public class WalledGarden implements ModInitializer {
 
             if (disconnect) {
                 player.networkHandler.disconnect(
-                        new TranslatableText("message.walled-garden.required",
+                        Text.translatable("message.walled-garden.required",
                                 "\n" + DependencyUtil.toString(dependency))
                 );
             }
         }
 
         source.sendFeedback(
-                new TranslatableText("command.walled-garden.required", DependencyUtil.toString(dependency)),
+                Text.translatable("command.walled-garden.required", DependencyUtil.toString(dependency)),
                 true);
 
         return 1;
@@ -243,7 +244,7 @@ public class WalledGarden implements ModInitializer {
     private static int blacklist(ServerCommandSource source, String modId, ModDependency dependency) {
         Config.blacklist(modId, dependency);
 
-        MinecraftServer server = source.getMinecraftServer();
+        MinecraftServer server = source.getServer();
         PlayerVersionMap versions = (PlayerVersionMap) server;
         PlayerManager playerManager = server.getPlayerManager();
 
@@ -253,14 +254,14 @@ public class WalledGarden implements ModInitializer {
 
             if (version != null && isBlacklisted(modId, version)) {
                 player.networkHandler.disconnect(
-                        new TranslatableText("message.walled-garden.blacklist",
+                        Text.translatable("message.walled-garden.blacklist",
                                 "\n" + DependencyUtil.toString(dependency))
                 );
             }
         }
 
         source.sendFeedback(
-                new TranslatableText("command.walled-garden.blacklist", DependencyUtil.toString(dependency)), true);
+                Text.translatable("command.walled-garden.blacklist", DependencyUtil.toString(dependency)), true);
 
         return 1;
     }
@@ -268,7 +269,7 @@ public class WalledGarden implements ModInitializer {
     private static int whitelist(ServerCommandSource source, String modId, ModDependency dependency) {
         Config.whitelist(modId, dependency);
 
-        MinecraftServer server = source.getMinecraftServer();
+        MinecraftServer server = source.getServer();
         PlayerVersionMap versions = (PlayerVersionMap) server;
         PlayerManager playerManager = server.getPlayerManager();
 
@@ -287,14 +288,14 @@ public class WalledGarden implements ModInitializer {
 
             if (!message.isEmpty()) {
                 player.networkHandler.disconnect(
-                        new TranslatableText("message.walled-garden.whitelist",
+                        Text.translatable("message.walled-garden.whitelist",
                                 message)
                 );
             }
         }
 
         source.sendFeedback(
-                new TranslatableText("command.walled-garden.whitelist", DependencyUtil.toString(dependency)), true);
+                Text.translatable("command.walled-garden.whitelist", DependencyUtil.toString(dependency)), true);
 
         return 1;
     }
@@ -409,7 +410,7 @@ public class WalledGarden implements ModInitializer {
             builder.append(dependency == null ? modId : dependency);
         }
 
-        return Optional.of(new TranslatableText("message.walled-garden.blacklist", builder.toString()));
+        return Optional.of(Text.translatable("message.walled-garden.blacklist", builder.toString()));
     }
 
     public static Optional<MutableText> checkRequiredMods(String playerName, Map<String, String> missingMods){
@@ -421,7 +422,7 @@ public class WalledGarden implements ModInitializer {
             LOG.info("\t{}: {}", entry.getKey(), entry.getValue());
         }
 
-        return Optional.of(new TranslatableText("message.walled-garden.required")
+        return Optional.of(Text.translatable("message.walled-garden.required")
                 .append(DependencyUtil.getTextWithLinks(missingMods)));
     }
 }

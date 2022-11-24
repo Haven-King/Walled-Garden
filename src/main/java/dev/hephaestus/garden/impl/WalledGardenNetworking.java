@@ -21,7 +21,6 @@ import net.minecraft.client.network.ClientLoginNetworkHandler;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerLoginNetworkHandler;
-import net.minecraft.text.LiteralText;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
@@ -32,8 +31,8 @@ import java.util.function.Consumer;
 
 public class WalledGardenNetworking implements ModInitializer, ClientModInitializer {
 	private static final Identifier MOD_VALIDATION_CHANNEL = WalledGarden.id("channel", "mod_validation");
-	private static final Text REQUEST_NOT_UNDERSTOOD = new LiteralText("Please install the Walled Garden mod to play on this server.");
-	private static final Text ALSO_REQUIRED = new LiteralText("The following mods are also required:");
+	private static final Text REQUEST_NOT_UNDERSTOOD = Text.literal("Please install the Walled Garden mod to play on this server.");
+	private static final Text ALSO_REQUIRED = Text.literal("The following mods are also required:");
 
 	@Override
 	public void onInitialize() {
@@ -73,7 +72,7 @@ public class WalledGardenNetworking implements ModInitializer, ClientModInitiali
 			MutableText text = REQUEST_NOT_UNDERSTOOD.copy();
 
 			if (!Config.getRequiredMods().isEmpty()) {
-				text.append(new LiteralText("\n").append(ALSO_REQUIRED));
+				text.append(Text.literal("\n").append(ALSO_REQUIRED));
 			}
 
 			text.append(DependencyUtil.getTextWithLinks(Collections.emptyMap()));
@@ -106,13 +105,13 @@ public class WalledGardenNetworking implements ModInitializer, ClientModInitiali
 
 			// Disconnect if either criteria is not met
 			if (blacklistResult.isPresent() || requiredModsResult.isPresent()) {
-				MutableText disconnectReason = new LiteralText("");
+				MutableText disconnectReason = Text.literal("");
 
 				if (blacklistResult.isPresent()) {
 					disconnectReason.append(blacklistResult.get());
 
 					if (requiredModsResult.isPresent()) {
-						disconnectReason.append(new LiteralText("\n\n"));
+						disconnectReason.append(Text.literal("\n\n"));
 					}
 				}
 

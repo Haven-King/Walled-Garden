@@ -3,44 +3,27 @@ package dev.hephaestus.garden.impl;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import com.google.gson.JsonPrimitive;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonToken;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
-import net.fabricmc.loader.api.VersionPredicate;
+import net.fabricmc.loader.api.Version;
+import net.fabricmc.loader.api.VersionParsingException;
 import net.fabricmc.loader.api.metadata.ModDependency;
-import net.fabricmc.loader.lib.gson.JsonReader;
-import net.fabricmc.loader.lib.gson.JsonToken;
-import net.fabricmc.loader.metadata.ParseMetadataException;
+import net.fabricmc.loader.api.metadata.version.VersionInterval;
+import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 import net.minecraft.text.ClickEvent;
-import net.minecraft.text.LiteralText;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.StringReader;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.util.*;
 
 public class DependencyUtil {
-    private static final Constructor<? extends ModDependency> MOD_DEPENDENCY_CONSTRUCTOR;
-
-    static {
-        Constructor<? extends ModDependency> MOD_DEPENDENCY_CONSTRUCTOR1 = null;
-
-        try {
-            //noinspection unchecked
-            Class<? extends ModDependency> clazz = (Class<? extends ModDependency>) Class.forName("net.fabricmc.loader.metadata.ModDependencyImpl");
-            MOD_DEPENDENCY_CONSTRUCTOR1 = clazz.getDeclaredConstructor(String.class, List.class);
-            MOD_DEPENDENCY_CONSTRUCTOR1.setAccessible(true);
-        } catch (ClassNotFoundException | NoSuchMethodException e) {
-            e.printStackTrace();
-        }
-
-        MOD_DEPENDENCY_CONSTRUCTOR = MOD_DEPENDENCY_CONSTRUCTOR1;
-    }
-
     static JsonObject toJsonObject(Map<String, ModDependency> map) {
         JsonObject object = new JsonObject();
 
@@ -56,7 +39,7 @@ public class DependencyUtil {
     }
 
     private static @Nullable JsonElement toJsonElement(ModDependency modDependency) {
-        Set<VersionPredicate> predicates = modDependency.getVersionRequirements();
+        Collection<VersionPredicate> predicates = modDependency.getVersionRequirements();
 
         if (predicates.size() == 1) {
             return new JsonPrimitive(predicates.iterator().next().toString());
@@ -73,9 +56,9 @@ public class DependencyUtil {
         return null;
     }
 
-    static void readDependenciesContainer(JsonReader reader, Map<String, ModDependency> modDependencies) throws IOException, ParseMetadataException {
+    static void readDependenciesContainer(JsonReader reader, Map<String, ModDependency> modDependencies) throws IOException, JsonParseException {
         if (reader.peek() != JsonToken.BEGIN_OBJECT) {
-            throw new ParseMetadataException("Dependency container must be an object!", reader);
+            throw parseException("Dependency container must be an object! Error was located at: ", reader);
         }
 
         reader.beginObject();
@@ -92,7 +75,7 @@ public class DependencyUtil {
         reader.endObject();
     }
 
-    private static @Nullable ModDependency dependency(String modId, JsonReader reader) throws IOException, ParseMetadataException {
+    private static @Nullable ModDependency dependency(String modId, JsonReader reader) throws IOException, JsonParseException {
             final List<String> matcherStringList = new ArrayList<>();
 
             FabricLoader loader = FabricLoader.getInstance();
@@ -116,7 +99,7 @@ public class DependencyUtil {
 
                     while (reader.hasNext()) {
                         if (reader.peek() != JsonToken.STRING) {
-                            throw new ParseMetadataException("Dependency version range array must only contain string values", reader);
+                            throw parseException("Dependency version range array must only contain string values! Error was located at: ", reader);
                         }
 
                         matcherStringList.add(reader.nextString());
@@ -125,12 +108,73 @@ public class DependencyUtil {
                     reader.endArray();
                     break;
                 default:
-                    throw new ParseMetadataException("Dependency version range must be a string or string array!", reader);
+                    throw parseException("Dependency version range must be a string or string array! Error was located at: ", reader);
             }
 
         try {
-            return matcherStringList.isEmpty() ? null : MOD_DEPENDENCY_CONSTRUCTOR.newInstance(modId, matcherStringList);
-        } catch (InstantiationException | IllegalAccessException | InvocationTargetException ignored) {
+            if (matcherStringList.isEmpty()) {
+                return null;
+            }
+
+            final Collection<VersionPredicate> ranges = VersionPredicate.parse(matcherStringList);
+
+            return new ModDependency() {
+                @Override
+                public String getModId() {
+                    return modId;
+                }
+
+                @Override
+                public Collection<VersionPredicate> getVersionRequirements() {
+                    return ranges;
+                }
+
+                @Override
+                public boolean matches(Version version) {
+                    for (VersionPredicate predicate : getVersionRequirements()) {
+                        if (predicate.test(version)) return true;
+                    }
+
+                    return false;
+                }
+
+                @Override
+                public List<VersionInterval> getVersionIntervals() {
+                    List<VersionInterval> ret = Collections.emptyList();
+
+                    for (VersionPredicate predicate : getVersionRequirements()) {
+                        ret = VersionInterval.or(ret, predicate.getInterval());
+                    }
+
+                    return ret;
+                }
+
+                @Override
+                public Kind getKind() {
+                    return Kind.DEPENDS;
+                }
+
+                @Override
+                public String toString() {
+                    final StringBuilder builder = new StringBuilder("{");
+                    builder.append(getKind().getKey());
+                    builder.append(' ');
+                    builder.append(getModId());
+                    builder.append(" @ [");
+
+                    for (int i = 0; i < matcherStringList.size(); i++) {
+                        if (i > 0) {
+                            builder.append(" || ");
+                        }
+
+                        builder.append(matcherStringList.get(i));
+                    }
+
+                    builder.append("]}");
+                    return builder.toString();
+                }
+            };
+        } catch (VersionParsingException ignored) {
             return null;
         }
     }
@@ -152,7 +196,7 @@ public class DependencyUtil {
     }
 
     static Text getTextWithLinks(Map<String, String> missingMods) {
-        MutableText text = new LiteralText("");
+        MutableText text = Text.literal("");
 
         FabricLoader loader = FabricLoader.getInstance();
 
@@ -160,7 +204,7 @@ public class DependencyUtil {
             text.append("\n");
 
             loader.getModContainer(entry.getKey()).ifPresent(modContainer -> {
-                text.append(new LiteralText(modContainer.getMetadata().getName() + " "));
+                text.append(Text.literal(modContainer.getMetadata().getName() + " "));
                 /* Man, I wish this worked, but the disconnect screen doesn't display links :(
                 Map<String, String> contact = modContainer.getMetadata().getContact().asMap();
 
@@ -171,9 +215,13 @@ public class DependencyUtil {
                 }*/
             });
 
-            text.append(new LiteralText(entry.getValue()));
+            text.append(Text.literal(entry.getValue()));
         }
 
         return text;
+    }
+
+    static JsonParseException parseException(String message, JsonReader reader) {
+        return new JsonParseException(message + reader.toString().substring(reader.getClass().getSimpleName().length()));
     }
 }
